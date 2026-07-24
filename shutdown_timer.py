@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image
 
-CURRENT_VERSION = "1.5.0"
+CURRENT_VERSION = "1.6.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -225,6 +225,7 @@ class ShutdownTimerApp:
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
+        self.discovery_socket = None
 
         root.title("Shutdown Timer")
         root.geometry("520x500")
@@ -522,10 +523,38 @@ class ShutdownTimerApp:
         try:
             self.remote_server = ThreadingHTTPServer(("0.0.0.0", 8765), RemoteHandler)
             threading.Thread(target=self.remote_server.serve_forever, daemon=True).start()
+            threading.Thread(target=self.discovery_loop, daemon=True).start()
         except OSError:
             self.remote_server = None
 
+    def discovery_loop(self):
+        """Let the Android app find this PC using only the six-digit PIN."""
+        try:
+            discovery = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            discovery.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            discovery.bind(("0.0.0.0", 8766))
+            discovery.settimeout(1)
+            self.discovery_socket = discovery
+            expected = f"SHUTDOWN_TIMER_DISCOVER:{self.remote_pin}"
+            while self.remote_server:
+                try:
+                    data, sender = discovery.recvfrom(1024)
+                    if data.decode("utf-8", errors="ignore").strip() == expected:
+                        reply = json.dumps(
+                            {"service": "shutdown_timer", "port": 8765}
+                        ).encode("utf-8")
+                        discovery.sendto(reply, sender)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+        except OSError:
+            self.discovery_socket = None
+
     def stop_remote_server(self):
+        if self.discovery_socket:
+            self.discovery_socket.close()
+            self.discovery_socket = None
         if self.remote_server:
             self.remote_server.shutdown()
             self.remote_server.server_close()

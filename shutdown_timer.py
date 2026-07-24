@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image
 
-CURRENT_VERSION = "1.6.0"
+CURRENT_VERSION = "1.6.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -564,11 +564,7 @@ class ShutdownTimerApp:
         self.hours_var.set(f"{hour:02d}")
         self.minutes_var.set(f"{minute:02d}")
         seconds, target, _ = self.selected_target()
-        subprocess.run(
-            ["shutdown", "/s", "/t", str(seconds)],
-            check=True,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        self.request_windows_shutdown(seconds)
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
@@ -581,6 +577,20 @@ class ShutdownTimerApp:
             self.text["remote_scheduled"].format(time=target.strftime("%H:%M"))
         )
         self.tick()
+
+    @staticmethod
+    def request_windows_shutdown(seconds):
+        """Start the Windows shutdown command without blocking the interface."""
+        shutdown_exe = os.path.join(
+            os.environ.get("SystemRoot", r"C:\Windows"),
+            "System32",
+            "shutdown.exe",
+        )
+        subprocess.Popen(
+            [shutdown_exe, "/s", "/t", str(seconds)],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            close_fds=True,
+        )
 
     def on_sound_selected(self, event=None):
         sound = self.sound_choices[self.sound_choice_var.get()]
@@ -764,11 +774,7 @@ class ShutdownTimerApp:
         if not confirmed:
             return
 
-        subprocess.run(
-            ["shutdown", "/s", "/t", str(seconds)],
-            check=True,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        self.request_windows_shutdown(seconds)
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()

@@ -16,9 +16,9 @@ from math import ceil
 from tkinter import filedialog, messagebox, ttk
 
 import pystray
-from PIL import Image
+from PIL import Image, ImageTk
 
-CURRENT_VERSION = "1.6.1"
+CURRENT_VERSION = "1.7.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -62,6 +62,10 @@ TEXTS = {
         "remote_address": "Indirizzo PC: {address}:8765",
         "remote_pin": "PIN: {pin}",
         "remote_scheduled": "Spegnimento Android programmato alle {time}.",
+        "background_image": "Sfondo personalizzato",
+        "choose_background": "Scegli immagine",
+        "remove_background": "Rimuovi sfondo",
+        "timer_cancelled": "Timer annullato.",
     },
     "german": {
         "subtitle": "Waehle die Uhrzeit zum Ausschalten",
@@ -103,6 +107,10 @@ TEXTS = {
         "remote_address": "PC-Adresse: {address}:8765",
         "remote_pin": "PIN: {pin}",
         "remote_scheduled": "Android-Abschaltung fuer {time} Uhr geplant.",
+        "background_image": "Eigenes Hintergrundbild",
+        "choose_background": "Bild auswählen",
+        "remove_background": "Hintergrund entfernen",
+        "timer_cancelled": "Timer abgebrochen.",
     },
     "english": {
         "subtitle": "Choose the time to shut down the computer",
@@ -144,6 +152,10 @@ TEXTS = {
         "remote_address": "PC address: {address}:8765",
         "remote_pin": "PIN: {pin}",
         "remote_scheduled": "Android shutdown scheduled for {time}.",
+        "background_image": "Custom background",
+        "choose_background": "Choose image",
+        "remove_background": "Remove background",
+        "timer_cancelled": "Timer cancelled.",
     },
 }
 
@@ -198,6 +210,20 @@ def save_sound(sound):
         winreg.SetValueEx(key, "WarningSound", 0, winreg.REG_SZ, sound)
 
 
+def saved_background():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            path, _ = winreg.QueryValueEx(key, "BackgroundImage")
+            return path if os.path.isfile(path) else ""
+    except OSError:
+        return ""
+
+
+def save_background(path):
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(key, "BackgroundImage", 0, winreg.REG_SZ, path)
+
+
 def remote_pin():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
@@ -222,6 +248,8 @@ class ShutdownTimerApp:
         self.theme_name = saved_theme()
         self.theme = THEMES[self.theme_name]
         self.warning_sound = saved_sound()
+        self.background_path = saved_background()
+        self.background_photo = None
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
@@ -231,8 +259,11 @@ class ShutdownTimerApp:
         root.geometry("520x500")
         root.resizable(False, False)
         root.configure(bg=self.theme["background"])
+        self.apply_background_image()
         root.iconbitmap(resource_path("logo.ico"))
         root.protocol("WM_DELETE_WINDOW", self.keep_running_in_background)
+        root.bind("<Control-Shift-X>", self.cancel_shutdown)
+        root.bind("<Control-Shift-x>", self.cancel_shutdown)
         self.create_tray_icon()
         self.start_remote_server()
         self.check_for_updates()
@@ -379,7 +410,7 @@ class ShutdownTimerApp:
     def open_settings(self):
         dialog = tk.Toplevel(self.root)
         dialog.title(self.text["settings"])
-        dialog.geometry("420x540")
+        dialog.geometry("420x640")
         dialog.resizable(False, False)
         dialog.configure(bg=self.theme["background"])
         dialog.transient(self.root)
@@ -457,6 +488,27 @@ class ShutdownTimerApp:
             ).grid(row=0, column=column, padx=5)
 
         tk.Label(
+            dialog, text=self.text["background_image"], font=("Segoe UI", 13, "bold"),
+            fg="white", bg=self.theme["background"],
+        ).pack(pady=(18, 7))
+        background_buttons = tk.Frame(dialog, bg=self.theme["background"])
+        background_buttons.pack(pady=4)
+        tk.Button(
+            background_buttons, text=self.text["choose_background"],
+            command=lambda window=dialog: self.choose_background(window),
+            font=("Segoe UI", 9), fg="white", bg=self.theme["accent"],
+            activebackground=self.theme["active"], activeforeground="white",
+            relief="flat", cursor="hand2", width=17,
+        ).grid(row=0, column=0, padx=5)
+        tk.Button(
+            background_buttons, text=self.text["remove_background"],
+            command=lambda window=dialog: self.remove_background(window),
+            font=("Segoe UI", 9), fg="white", bg=self.theme["panel"],
+            activebackground=self.theme["active"], activeforeground="white",
+            relief="flat", cursor="hand2", width=19,
+        ).grid(row=0, column=1, padx=5)
+
+        tk.Label(
             dialog, text=self.text["remote"], font=("Segoe UI", 13, "bold"),
             fg="white", bg=self.theme["background"],
         ).pack(pady=(18, 5))
@@ -482,6 +534,36 @@ class ShutdownTimerApp:
             return address
         except OSError:
             return "127.0.0.1"
+
+    def apply_background_image(self):
+        if not self.background_path:
+            return
+        try:
+            image = Image.open(self.background_path).convert("RGB")
+            image = image.resize((520, 500), Image.Resampling.LANCZOS)
+            self.background_photo = ImageTk.PhotoImage(image)
+            label = tk.Label(self.root, image=self.background_photo, borderwidth=0)
+            label.place(x=0, y=0, relwidth=1, relheight=1)
+            label.lower()
+        except (OSError, ValueError):
+            self.background_path = ""
+            save_background("")
+
+    def choose_background(self, dialog):
+        path = filedialog.askopenfilename(
+            parent=dialog,
+            title=self.text["choose_background"],
+            filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp;*.webp")],
+        )
+        if path:
+            save_background(path)
+            dialog.destroy()
+            self.restart_interface()
+
+    def remove_background(self, dialog):
+        save_background("")
+        dialog.destroy()
+        self.restart_interface()
 
     def start_remote_server(self):
         app = self
@@ -789,6 +871,8 @@ class ShutdownTimerApp:
         self.tick()
 
     def tick(self):
+        if not self.running:
+            return
         hours, rest = divmod(self.remaining, 3600)
         minutes, seconds = divmod(rest, 60)
         self.clock.config(text=f"{hours:02d}:{minutes:02d}:{seconds:02d}")
@@ -809,6 +893,28 @@ class ShutdownTimerApp:
             self.root.after(1000, self.tick)
         else:
             self.status.config(text=self.text["shutdown"])
+
+    def cancel_shutdown(self, event=None):
+        if not self.running:
+            return
+        shutdown_exe = os.path.join(
+            os.environ.get("SystemRoot", r"C:\Windows"), "System32", "shutdown.exe"
+        )
+        subprocess.Popen(
+            [shutdown_exe, "/a"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            close_fds=True,
+        )
+        self.running = False
+        self.remaining = 0
+        self.notified_minutes.clear()
+        self.start_button.config(state="normal", bg=self.theme["accent"])
+        self.settings_button.config(state="normal")
+        self.hours_spin.config(state="readonly")
+        self.minutes_spin.config(state="readonly")
+        self.status.config(text=self.text["timer_cancelled"], fg="#aab4c8")
+        self.update_preview()
+        self.show_notification(self.text["timer_cancelled"])
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.9.0"
+CURRENT_VERSION = "2.0.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -445,12 +445,11 @@ class ShutdownTimerApp:
         ).pack()
         self.clock = tk.Label(
             clock_card,
-            text="01:00:00",
-            font=("Bahnschrift SemiBold", 39),
-            fg=self.theme["accent"],
             bg=self.theme["panel"],
+            borderwidth=0,
         )
         self.clock.pack()
+        self.set_clock_text("01:00:00")
 
         selector = tk.Frame(
             root, bg=self.theme["panel"],
@@ -515,22 +514,17 @@ class ShutdownTimerApp:
         )
         self.status.pack()
 
+        self.start_button_photo = self.create_start_button_image(False)
+        self.start_button_disabled_photo = self.create_start_button_image(True)
         self.start_button = tk.Button(
             root,
-            text=self.text["start"],
+            image=self.start_button_photo,
             command=self.start_shutdown,
-            font=("Bahnschrift SemiBold", 15),
-            fg="white",
-            bg=self.theme["accent"],
-            activebackground=self.theme["active"],
-            activeforeground="white",
+            bg=self.theme["background"],
+            activebackground=self.theme["background"],
             relief="flat",
             cursor="hand2",
-            width=23,
-            height=2,
-            highlightbackground="#20d3ee",
-            highlightcolor="#20d3ee",
-            highlightthickness=2,
+            highlightthickness=0,
             borderwidth=0,
         )
         self.start_button.pack()
@@ -542,6 +536,83 @@ class ShutdownTimerApp:
             fg="#737d91",
             bg=self.theme["background"],
         ).pack(pady=12)
+
+    def create_gradient_text_image(self, text, width, height, font_size, background):
+        font_path = os.path.join(
+            os.environ.get("SystemRoot", r"C:\Windows"), "Fonts", "bahnschrift.ttf"
+        )
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+        except OSError:
+            font = ImageFont.load_default()
+        mask = Image.new("L", (width, height), 0)
+        draw = ImageDraw.Draw(mask)
+        box = draw.textbbox((0, 0), text, font=font)
+        x = (width - (box[2] - box[0])) // 2
+        y = (height - (box[3] - box[1])) // 2 - box[1]
+        draw.text((x, y), text, font=font, fill=255)
+
+        gradient = Image.new("RGBA", (width, height))
+        gradient_draw = ImageDraw.Draw(gradient)
+        left, middle, right = (49, 232, 143), (34, 211, 238), (59, 130, 246)
+        for px in range(width):
+            ratio = px / max(1, width - 1)
+            start, end, mix = (
+                (left, middle, ratio * 2)
+                if ratio < 0.5
+                else (middle, right, (ratio - 0.5) * 2)
+            )
+            color = tuple(int(start[i] + (end[i] - start[i]) * mix) for i in range(3))
+            gradient_draw.line((px, 0, px, height), fill=(*color, 255))
+
+        result = Image.new("RGBA", (width, height), background)
+        glow_mask = mask.filter(ImageFilter.GaussianBlur(6))
+        glow = Image.new("RGBA", (width, height), (32, 211, 238, 120))
+        empty = Image.new("RGBA", (width, height))
+        result.alpha_composite(Image.composite(glow, empty, glow_mask))
+        result.alpha_composite(Image.composite(gradient, empty, mask))
+        return ImageTk.PhotoImage(result)
+
+    def set_clock_text(self, text):
+        self.clock_photo = self.create_gradient_text_image(
+            text, 330, 62, 46, self.theme["panel"]
+        )
+        self.clock.config(image=self.clock_photo)
+
+    def create_start_button_image(self, disabled):
+        width, height = 290, 66
+        image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        mask = Image.new("L", (width, height), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((3, 3, width - 4, height - 4), radius=18, fill=255)
+        gradient = Image.new("RGBA", (width, height))
+        draw = ImageDraw.Draw(gradient)
+        colors = ((40, 180, 100), (25, 190, 190), (45, 115, 225)) if not disabled else ((60, 75, 85), (65, 80, 90), (55, 70, 85))
+        for px in range(width):
+            ratio = px / max(1, width - 1)
+            if ratio < 0.5:
+                start, end, mix = colors[0], colors[1], ratio * 2
+            else:
+                start, end, mix = colors[1], colors[2], (ratio - 0.5) * 2
+            color = tuple(int(start[i] + (end[i] - start[i]) * mix) for i in range(3))
+            draw.line((px, 0, px, height), fill=(*color, 255))
+        image.alpha_composite(Image.composite(gradient, Image.new("RGBA", (width, height)), mask))
+        border = ImageDraw.Draw(image)
+        border.rounded_rectangle((3, 3, width - 4, height - 4), radius=18, outline=(150, 245, 255, 220), width=2)
+        font_path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Fonts", "bahnschrift.ttf")
+        try:
+            font = ImageFont.truetype(font_path, 18)
+        except OSError:
+            font = ImageFont.load_default()
+        text = self.text["start"]
+        box = border.textbbox((0, 0), text, font=font)
+        border.text(((width - (box[2] - box[0])) // 2, (height - (box[3] - box[1])) // 2 - box[1]), text, font=font, fill=(255, 255, 255, 255))
+        return ImageTk.PhotoImage(image)
+
+    def set_start_button_enabled(self, enabled):
+        self.start_button.config(
+            state="normal" if enabled else "disabled",
+            image=self.start_button_photo if enabled else self.start_button_disabled_photo,
+        )
 
     def create_title_image(self):
         width, height = 430, 68
@@ -981,7 +1052,7 @@ class ShutdownTimerApp:
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
-        self.start_button.config(state="disabled", bg="#355443")
+        self.set_start_button_enabled(False)
         self.settings_button.config(state="disabled")
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
@@ -1131,7 +1202,7 @@ class ShutdownTimerApp:
         seconds, _, _ = self.selected_target()
         hours, rest = divmod(seconds, 3600)
         minutes, secs = divmod(rest, 60)
-        self.clock.config(text=f"{hours:02d}:{minutes:02d}:{secs:02d}")
+        self.set_clock_text(f"{hours:02d}:{minutes:02d}:{secs:02d}")
 
     def keep_running_in_background(self):
         """Keep the timer alive if the window is closed accidentally."""
@@ -1192,7 +1263,7 @@ class ShutdownTimerApp:
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
-        self.start_button.config(state="disabled", bg="#355443")
+        self.set_start_button_enabled(False)
         self.settings_button.config(state="disabled")
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
@@ -1207,7 +1278,7 @@ class ShutdownTimerApp:
             return
         hours, rest = divmod(self.remaining, 3600)
         minutes, seconds = divmod(rest, 60)
-        self.clock.config(text=f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        self.set_clock_text(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
         minutes_left = ceil(self.remaining / 60)
         if minutes_left in (10, 5, 1) and minutes_left not in self.notified_minutes:
@@ -1243,7 +1314,7 @@ class ShutdownTimerApp:
             self.warning_window.destroy()
         self.remaining = 0
         self.notified_minutes.clear()
-        self.start_button.config(state="normal", bg=self.theme["accent"])
+        self.set_start_button_enabled(True)
         self.settings_button.config(state="normal")
         self.hours_spin.config(state="readonly")
         self.minutes_spin.config(state="readonly")

@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.8.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -517,10 +517,10 @@ class ShutdownTimerApp:
     def create_title_image(self):
         width, height = 430, 68
         font_path = os.path.join(
-            os.environ.get("SystemRoot", r"C:\Windows"), "Fonts", "seguisb.ttf"
+            os.environ.get("SystemRoot", r"C:\Windows"), "Fonts", "bahnschrift.ttf"
         )
         try:
-            font = ImageFont.truetype(font_path, 36)
+            font = ImageFont.truetype(font_path, 37)
         except OSError:
             font = ImageFont.load_default()
 

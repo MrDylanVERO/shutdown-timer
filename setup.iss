@@ -1,7 +1,7 @@
 [Setup]
 AppId={{8B3F963A-9A35-44F2-A6E4-72E8B941225F}
 AppName=Shutdown Timer
-AppVersion=2.0.1
+AppVersion=2.0.2
 DefaultDirName={localappdata}\Programs\Shutdown Timer
 DefaultGroupName=Shutdown Timer
 PrivilegesRequired=lowest
@@ -12,6 +12,7 @@ UninstallDisplayIcon={app}\Shutdown-Timer.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+ChangesAssociations=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -26,9 +27,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "dist\Shutdown-Timer.exe"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+Type: files; Name: "{autodesktop}\Shutdown Timer.lnk"
+
 [Icons]
-Name: "{group}\Shutdown Timer"; Filename: "{app}\Shutdown-Timer.exe"
-Name: "{autodesktop}\Shutdown Timer"; Filename: "{app}\Shutdown-Timer.exe"; Tasks: desktopicon
+Name: "{group}\Shutdown Timer"; Filename: "{app}\Shutdown-Timer.exe"; IconFilename: "{app}\Shutdown-Timer.exe"
+Name: "{autodesktop}\Shutdown Timer"; Filename: "{app}\Shutdown-Timer.exe"; IconFilename: "{app}\Shutdown-Timer.exe"; Tasks: desktopicon
 
 [Registry]
 Root: HKA; Subkey: "Software\ShutdownTimer"; ValueType: string; ValueName: "Language"; ValueData: "{language}"; Flags: uninsdeletekey

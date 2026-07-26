@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.8.0"
+CURRENT_VERSION = "1.8.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -76,6 +76,7 @@ TEXTS = {
         "last_timer": "Ultimo timer: {last}",
         "never": "Mai",
         "warning_title": "Spegnimento imminente",
+        "start_with_windows": "Avvia con Windows",
     },
     "german": {
         "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
@@ -131,6 +132,7 @@ TEXTS = {
         "last_timer": "Letzter Timer: {last}",
         "never": "Nie",
         "warning_title": "Ausschalten steht bevor",
+        "start_with_windows": "Mit Windows starten",
     },
     "english": {
         "subtitle": "Choose the time. Shutdown Timer handles the rest.",
@@ -186,6 +188,7 @@ TEXTS = {
         "last_timer": "Last timer: {last}",
         "never": "Never",
         "warning_title": "Shutdown approaching",
+        "start_with_windows": "Start with Windows",
     },
 }
 
@@ -285,6 +288,33 @@ def save_statistics(count, last):
         winreg.SetValueEx(key, "LastTimer", 0, winreg.REG_SZ, last)
 
 
+def startup_enabled():
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "ShutdownTimer")
+            return bool(value)
+    except OSError:
+        return False
+
+
+def set_startup_enabled(enabled):
+    run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, run_key) as key:
+        if enabled:
+            executable = os.path.abspath(sys.executable)
+            winreg.SetValueEx(
+                key, "ShutdownTimer", 0, winreg.REG_SZ, f'"{executable}"'
+            )
+        else:
+            try:
+                winreg.DeleteValue(key, "ShutdownTimer")
+            except OSError:
+                pass
+
+
 def remote_pin():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
@@ -314,6 +344,7 @@ class ShutdownTimerApp:
         self.auto_updates = saved_auto_updates()
         self.timer_count, self.last_timer = saved_statistics()
         self.warning_window = None
+        self.start_with_windows = startup_enabled()
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
@@ -529,7 +560,7 @@ class ShutdownTimerApp:
     def open_settings(self):
         dialog = tk.Toplevel(self.root)
         dialog.title(self.text["settings"])
-        dialog.geometry("480x840")
+        dialog.geometry("480x900")
         dialog.resizable(False, False)
         dialog.configure(bg=self.theme["background"])
         dialog.transient(self.root)
@@ -656,6 +687,22 @@ class ShutdownTimerApp:
         )
         self.update_toggle_button.pack()
 
+        self.startup_toggle_button = tk.Button(
+            dialog,
+            text=self.startup_toggle_text(),
+            command=self.toggle_start_with_windows,
+            font=("Segoe UI", 10, "bold"),
+            fg="white",
+            bg=self.theme["accent"] if self.start_with_windows else self.theme["panel"],
+            activebackground=self.theme["active"],
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            width=28,
+            height=2,
+        )
+        self.startup_toggle_button.pack(pady=(8, 0))
+
         tk.Label(
             dialog, text=self.text["remote"], font=("Segoe UI", 13, "bold"),
             fg="white", bg=self.theme["background"],
@@ -755,6 +802,18 @@ class ShutdownTimerApp:
         )
         if self.auto_updates:
             self.check_for_updates()
+
+    def startup_toggle_text(self):
+        state = self.text["updates_on"] if self.start_with_windows else self.text["updates_off"]
+        return f'{self.text["start_with_windows"]}: {state}'
+
+    def toggle_start_with_windows(self):
+        self.start_with_windows = not self.start_with_windows
+        set_startup_enabled(self.start_with_windows)
+        self.startup_toggle_button.config(
+            text=self.startup_toggle_text(),
+            bg=self.theme["accent"] if self.start_with_windows else self.theme["panel"],
+        )
 
     def generate_new_pin(self, dialog):
         if not messagebox.askyesno(

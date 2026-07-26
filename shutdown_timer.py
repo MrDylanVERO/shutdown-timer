@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.7.3"
+CURRENT_VERSION = "1.7.4"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -66,6 +66,9 @@ TEXTS = {
         "choose_background": "Scegli immagine",
         "remove_background": "Rimuovi sfondo",
         "timer_cancelled": "Timer annullato.",
+        "automatic_updates": "Aggiornamenti automatici",
+        "updates_on": "ATTIVI",
+        "updates_off": "DISATTIVATI",
     },
     "german": {
         "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
@@ -111,6 +114,9 @@ TEXTS = {
         "choose_background": "Bild auswählen",
         "remove_background": "Hintergrund entfernen",
         "timer_cancelled": "Timer abgebrochen.",
+        "automatic_updates": "Automatische Updates",
+        "updates_on": "EIN",
+        "updates_off": "AUS",
     },
     "english": {
         "subtitle": "Choose the time. Shutdown Timer handles the rest.",
@@ -156,6 +162,9 @@ TEXTS = {
         "choose_background": "Choose image",
         "remove_background": "Remove background",
         "timer_cancelled": "Timer cancelled.",
+        "automatic_updates": "Automatic updates",
+        "updates_on": "ON",
+        "updates_off": "OFF",
     },
 }
 
@@ -224,6 +233,20 @@ def save_background(path):
         winreg.SetValueEx(key, "BackgroundImage", 0, winreg.REG_SZ, path)
 
 
+def saved_auto_updates():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            enabled, _ = winreg.QueryValueEx(key, "AutomaticUpdates")
+            return bool(enabled)
+    except OSError:
+        return True
+
+
+def save_auto_updates(enabled):
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(key, "AutomaticUpdates", 0, winreg.REG_DWORD, int(enabled))
+
+
 def remote_pin():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
@@ -250,6 +273,7 @@ class ShutdownTimerApp:
         self.warning_sound = saved_sound()
         self.background_path = saved_background()
         self.background_photo = None
+        self.auto_updates = saved_auto_updates()
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
@@ -266,7 +290,8 @@ class ShutdownTimerApp:
         root.bind("<Control-Shift-x>", self.cancel_shutdown)
         self.create_tray_icon()
         self.start_remote_server()
-        self.check_for_updates()
+        if self.auto_updates:
+            self.check_for_updates()
 
         style = ttk.Style(root)
         style.theme_use("clam")
@@ -463,7 +488,7 @@ class ShutdownTimerApp:
     def open_settings(self):
         dialog = tk.Toplevel(self.root)
         dialog.title(self.text["settings"])
-        dialog.geometry("420x640")
+        dialog.geometry("420x710")
         dialog.resizable(False, False)
         dialog.configure(bg=self.theme["background"])
         dialog.transient(self.root)
@@ -562,6 +587,26 @@ class ShutdownTimerApp:
         ).grid(row=0, column=1, padx=5)
 
         tk.Label(
+            dialog, text=self.text["automatic_updates"], font=("Segoe UI", 13, "bold"),
+            fg="white", bg=self.theme["background"],
+        ).pack(pady=(18, 7))
+        self.update_toggle_button = tk.Button(
+            dialog,
+            text=self.update_toggle_text(),
+            command=self.toggle_auto_updates,
+            font=("Segoe UI", 10, "bold"),
+            fg="white",
+            bg=self.theme["accent"] if self.auto_updates else self.theme["panel"],
+            activebackground=self.theme["active"],
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            width=28,
+            height=2,
+        )
+        self.update_toggle_button.pack()
+
+        tk.Label(
             dialog, text=self.text["remote"], font=("Segoe UI", 13, "bold"),
             fg="white", bg=self.theme["background"],
         ).pack(pady=(18, 5))
@@ -617,6 +662,20 @@ class ShutdownTimerApp:
         save_background("")
         dialog.destroy()
         self.restart_interface()
+
+    def update_toggle_text(self):
+        state = self.text["updates_on"] if self.auto_updates else self.text["updates_off"]
+        return f'{self.text["automatic_updates"]}: {state}'
+
+    def toggle_auto_updates(self):
+        self.auto_updates = not self.auto_updates
+        save_auto_updates(self.auto_updates)
+        self.update_toggle_button.config(
+            text=self.update_toggle_text(),
+            bg=self.theme["accent"] if self.auto_updates else self.theme["panel"],
+        )
+        if self.auto_updates:
+            self.check_for_updates()
 
     def start_remote_server(self):
         app = self

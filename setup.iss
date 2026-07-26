@@ -1,7 +1,7 @@
 [Setup]
 AppId={{8B3F963A-9A35-44F2-A6E4-72E8B941225F}
 AppName=Shutdown Timer
-AppVersion=1.8.2
+AppVersion=1.9
 DefaultDirName={localappdata}\Programs\Shutdown Timer
 DefaultGroupName=Shutdown Timer
 PrivilegesRequired=lowest

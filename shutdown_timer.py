@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.8.2"
+CURRENT_VERSION = "1.9.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -27,7 +27,7 @@ TEXTS = {
         "hours": "Ora",
         "minutes": "Minuti",
         "ready": "Pronto",
-        "start": "AVVIA TIMER",
+        "start": "▶  AVVIA TIMER",
         "background": "Chiudendo la finestra, l'app resta attiva nell'area di notifica.",
         "open": "Apri Shutdown Timer",
         "exit": "Esci",
@@ -83,7 +83,7 @@ TEXTS = {
         "hours": "Stunde",
         "minutes": "Minuten",
         "ready": "Bereit",
-        "start": "TIMER STARTEN",
+        "start": "▶  TIMER STARTEN",
         "background": "Beim Schliessen bleibt die App im Infobereich aktiv.",
         "open": "Shutdown Timer oeffnen",
         "exit": "Beenden",
@@ -139,7 +139,7 @@ TEXTS = {
         "hours": "Hour",
         "minutes": "Minutes",
         "ready": "Ready",
-        "start": "START TIMER",
+        "start": "▶  START TIMER",
         "background": "Closing the window keeps the app running in the system tray.",
         "open": "Open Shutdown Timer",
         "exit": "Exit",
@@ -427,17 +427,37 @@ class ShutdownTimerApp:
             bg=self.theme["panel"],
         ).pack()
 
-        self.clock = tk.Label(
+        clock_card = tk.Frame(
             root,
-            text="01:00:00",
-            font=("Consolas", 42, "bold"),
-            fg=self.theme["accent"],
-            bg=self.theme["background"],
+            bg=self.theme["panel"],
+            highlightbackground=self.theme["accent"],
+            highlightthickness=2,
+            padx=18,
+            pady=5,
         )
-        self.clock.pack(pady=(20, 5))
+        clock_card.pack(pady=(17, 8))
+        tk.Label(
+            clock_card,
+            text="COUNTDOWN",
+            font=("Bahnschrift SemiCondensed", 9, "bold"),
+            fg="#8ca0bd",
+            bg=self.theme["panel"],
+        ).pack()
+        self.clock = tk.Label(
+            clock_card,
+            text="01:00:00",
+            font=("Bahnschrift SemiBold", 39),
+            fg=self.theme["accent"],
+            bg=self.theme["panel"],
+        )
+        self.clock.pack()
 
-        selector = tk.Frame(root, bg=self.theme["background"])
-        selector.pack(pady=(5, 12))
+        selector = tk.Frame(
+            root, bg=self.theme["panel"],
+            highlightbackground="#34415a", highlightthickness=1,
+            padx=18, pady=8,
+        )
+        selector.pack(pady=(2, 10))
 
         default_time = datetime.now() + timedelta(hours=1)
         self.hours_var = tk.StringVar(value=f"{default_time.hour:02d}")
@@ -445,11 +465,11 @@ class ShutdownTimerApp:
         self.hours_var.trace_add("write", self.update_preview)
         self.minutes_var.trace_add("write", self.update_preview)
 
-        hours_box = tk.Frame(selector, bg=self.theme["background"])
+        hours_box = tk.Frame(selector, bg=self.theme["panel"])
         hours_box.pack(side="left", padx=16)
         tk.Label(
             hours_box, text=self.text["hours"], font=("Segoe UI", 10),
-            fg="#aab4c8", bg=self.theme["background"]
+            fg="#c7f3ff", bg=self.theme["panel"]
         ).pack()
         self.hours_spin = ttk.Combobox(
             hours_box,
@@ -463,11 +483,11 @@ class ShutdownTimerApp:
         )
         self.hours_spin.pack(pady=4)
 
-        minutes_box = tk.Frame(selector, bg=self.theme["background"])
+        minutes_box = tk.Frame(selector, bg=self.theme["panel"])
         minutes_box.pack(side="left", padx=16)
         tk.Label(
             minutes_box, text=self.text["minutes"], font=("Segoe UI", 10),
-            fg="#aab4c8", bg=self.theme["background"]
+            fg="#c7f3ff", bg=self.theme["panel"]
         ).pack()
         self.minutes_spin = ttk.Combobox(
             minutes_box,
@@ -481,28 +501,37 @@ class ShutdownTimerApp:
         )
         self.minutes_spin.pack(pady=4)
 
-        self.status = tk.Label(
-            root,
-            text=self.text["ready"],
-            font=("Segoe UI", 11),
-            fg="#aab4c8",
-            bg=self.theme["background"],
+        status_card = tk.Frame(
+            root, bg=self.theme["panel"], padx=18, pady=4,
+            highlightbackground="#34415a", highlightthickness=1,
         )
-        self.status.pack(pady=(0, 16))
+        status_card.pack(pady=(0, 11))
+        self.status = tk.Label(
+            status_card,
+            text=self.text["ready"],
+            font=("Segoe UI Semibold", 10),
+            fg="#c7f3ff",
+            bg=self.theme["panel"],
+        )
+        self.status.pack()
 
         self.start_button = tk.Button(
             root,
             text=self.text["start"],
             command=self.start_shutdown,
-            font=("Segoe UI", 14, "bold"),
+            font=("Bahnschrift SemiBold", 15),
             fg="white",
             bg=self.theme["accent"],
             activebackground=self.theme["active"],
             activeforeground="white",
             relief="flat",
             cursor="hand2",
-            width=20,
+            width=23,
             height=2,
+            highlightbackground="#20d3ee",
+            highlightcolor="#20d3ee",
+            highlightthickness=2,
+            borderwidth=0,
         )
         self.start_button.pack()
 
@@ -512,7 +541,7 @@ class ShutdownTimerApp:
             font=("Segoe UI", 9),
             fg="#737d91",
             bg=self.theme["background"],
-        ).pack(pady=18)
+        ).pack(pady=12)
 
     def create_title_image(self):
         width, height = 430, 68

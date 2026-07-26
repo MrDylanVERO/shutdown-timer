@@ -16,9 +16,9 @@ from math import ceil
 from tkinter import filedialog, messagebox, ttk
 
 import pystray
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.7.1"
+CURRENT_VERSION = "1.7.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -289,13 +289,14 @@ class ShutdownTimerApp:
             selectforeground=[("readonly", "white")],
         )
 
+        self.title_photo = self.create_title_image()
         tk.Label(
             root,
-            text="SHUTDOWN TIMER",
-            font=("Segoe UI", 24, "bold"),
-            fg="white",
+            image=self.title_photo,
+            borderwidth=0,
+            highlightthickness=0,
             bg=self.theme["background"],
-        ).pack(pady=(35, 5))
+        ).pack(pady=(27, 0))
 
         self.settings_button = tk.Button(
             root,
@@ -406,6 +407,49 @@ class ShutdownTimerApp:
             fg="#737d91",
             bg=self.theme["background"],
         ).pack(pady=18)
+
+    def create_title_image(self):
+        width, height = 430, 68
+        font_path = os.path.join(
+            os.environ.get("SystemRoot", r"C:\Windows"), "Fonts", "seguisb.ttf"
+        )
+        try:
+            font = ImageFont.truetype(font_path, 36)
+        except OSError:
+            font = ImageFont.load_default()
+
+        mask = Image.new("L", (width, height), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        text = "SHUTDOWN TIMER"
+        box = mask_draw.textbbox((0, 0), text, font=font)
+        text_width = box[2] - box[0]
+        x = (width - text_width) // 2
+        mask_draw.text((x, 4), text, font=font, fill=255)
+
+        gradient = Image.new("RGBA", (width, height))
+        pixels = gradient.load()
+        colors = ((46, 230, 138), (32, 211, 238), (59, 130, 246))
+        for px in range(width):
+            position = px / max(1, width - 1)
+            if position < 0.5:
+                mix = position * 2
+                start, end = colors[0], colors[1]
+            else:
+                mix = (position - 0.5) * 2
+                start, end = colors[1], colors[2]
+            color = tuple(int(start[i] + (end[i] - start[i]) * mix) for i in range(3))
+            for py in range(height):
+                pixels[px, py] = (*color, 255)
+
+        glow_mask = mask.filter(ImageFilter.GaussianBlur(7))
+        result = Image.new("RGBA", (width, height), self.theme["background"])
+        glow = Image.new("RGBA", (width, height), (35, 210, 185, 135))
+        empty = Image.new("RGBA", (width, height))
+        result.alpha_composite(Image.composite(glow, empty, glow_mask))
+        result.alpha_composite(Image.composite(gradient, empty, mask))
+        line_draw = ImageDraw.Draw(result)
+        line_draw.rounded_rectangle((95, 57, 335, 61), radius=2, fill=(34, 211, 238, 210))
+        return ImageTk.PhotoImage(result)
 
     def open_settings(self):
         dialog = tk.Toplevel(self.root)

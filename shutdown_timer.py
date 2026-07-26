@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.7.4"
+CURRENT_VERSION = "1.8.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -69,6 +69,13 @@ TEXTS = {
         "automatic_updates": "Aggiornamenti automatici",
         "updates_on": "ATTIVI",
         "updates_off": "DISATTIVATI",
+        "change_pin": "Genera nuovo PIN",
+        "change_pin_confirm": "Generare un nuovo PIN? L'app Android dovrà usare il nuovo PIN.",
+        "statistics": "Statistiche",
+        "timers_started": "Timer avviati: {count}",
+        "last_timer": "Ultimo timer: {last}",
+        "never": "Mai",
+        "warning_title": "Spegnimento imminente",
     },
     "german": {
         "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
@@ -117,6 +124,13 @@ TEXTS = {
         "automatic_updates": "Automatische Updates",
         "updates_on": "EIN",
         "updates_off": "AUS",
+        "change_pin": "Neue PIN erzeugen",
+        "change_pin_confirm": "Neue PIN erzeugen? Die Android-App muss danach die neue PIN verwenden.",
+        "statistics": "Statistik",
+        "timers_started": "Gestartete Timer: {count}",
+        "last_timer": "Letzter Timer: {last}",
+        "never": "Nie",
+        "warning_title": "Ausschalten steht bevor",
     },
     "english": {
         "subtitle": "Choose the time. Shutdown Timer handles the rest.",
@@ -165,6 +179,13 @@ TEXTS = {
         "automatic_updates": "Automatic updates",
         "updates_on": "ON",
         "updates_off": "OFF",
+        "change_pin": "Generate new PIN",
+        "change_pin_confirm": "Generate a new PIN? The Android app must then use the new PIN.",
+        "statistics": "Statistics",
+        "timers_started": "Timers started: {count}",
+        "last_timer": "Last timer: {last}",
+        "never": "Never",
+        "warning_title": "Shutdown approaching",
     },
 }
 
@@ -247,6 +268,23 @@ def save_auto_updates(enabled):
         winreg.SetValueEx(key, "AutomaticUpdates", 0, winreg.REG_DWORD, int(enabled))
 
 
+def saved_statistics():
+    count, last = 0, ""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            count, _ = winreg.QueryValueEx(key, "TimerCount")
+            last, _ = winreg.QueryValueEx(key, "LastTimer")
+    except OSError:
+        pass
+    return int(count), str(last)
+
+
+def save_statistics(count, last):
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(key, "TimerCount", 0, winreg.REG_DWORD, count)
+        winreg.SetValueEx(key, "LastTimer", 0, winreg.REG_SZ, last)
+
+
 def remote_pin():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
@@ -274,6 +312,8 @@ class ShutdownTimerApp:
         self.background_path = saved_background()
         self.background_photo = None
         self.auto_updates = saved_auto_updates()
+        self.timer_count, self.last_timer = saved_statistics()
+        self.warning_window = None
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
@@ -327,14 +367,15 @@ class ShutdownTimerApp:
             root,
             text="⚙",
             command=self.open_settings,
-            font=("Segoe UI Symbol", 15),
+            font=("Segoe UI Symbol", 18, "bold"),
             fg="white",
-            bg=self.theme["panel"],
+            bg=self.theme["accent"],
             activebackground=self.theme["accent"],
             activeforeground="white",
             relief="flat",
             cursor="hand2",
             width=3,
+            height=1,
         )
         self.settings_button.place(x=458, y=22)
 
@@ -488,7 +529,7 @@ class ShutdownTimerApp:
     def open_settings(self):
         dialog = tk.Toplevel(self.root)
         dialog.title(self.text["settings"])
-        dialog.geometry("420x710")
+        dialog.geometry("480x840")
         dialog.resizable(False, False)
         dialog.configure(bg=self.theme["background"])
         dialog.transient(self.root)
@@ -497,11 +538,20 @@ class ShutdownTimerApp:
 
         tk.Label(
             dialog,
+            text=f'⚙  {self.text["settings"].upper()}',
+            font=("Segoe UI", 22, "bold"),
+            fg="#c7f3ff",
+            bg=self.theme["background"],
+        ).pack(pady=(22, 8))
+        tk.Frame(dialog, bg="#20d3ee", height=3, width=300).pack(pady=(0, 10))
+
+        tk.Label(
+            dialog,
             text=self.text["choose_theme"],
-            font=("Segoe UI", 17, "bold"),
+            font=("Segoe UI", 13, "bold"),
             fg="white",
             bg=self.theme["background"],
-        ).pack(pady=(25, 18))
+        ).pack(pady=(5, 10))
 
         buttons = tk.Frame(dialog, bg=self.theme["background"])
         buttons.pack()
@@ -621,6 +671,35 @@ class ShutdownTimerApp:
             font=("Consolas", 13, "bold"), fg=self.theme["accent"],
             bg=self.theme["background"],
         ).pack(pady=3)
+        tk.Button(
+            dialog,
+            text=self.text["change_pin"],
+            command=lambda window=dialog: self.generate_new_pin(window),
+            font=("Segoe UI", 10, "bold"), fg="white",
+            bg=self.theme["accent"], activebackground=self.theme["active"],
+            activeforeground="white", relief="flat", cursor="hand2", width=24,
+        ).pack(pady=(5, 12))
+
+        stats_card = tk.Frame(
+            dialog, bg=self.theme["panel"],
+            highlightbackground="#20d3ee", highlightthickness=1,
+            padx=22, pady=10,
+        )
+        stats_card.pack(pady=(0, 18), padx=35, fill="x")
+        tk.Label(
+            stats_card, text=self.text["statistics"], font=("Segoe UI", 13, "bold"),
+            fg="white", bg=self.theme["panel"],
+        ).pack()
+        tk.Label(
+            stats_card,
+            text=self.text["timers_started"].format(count=self.timer_count),
+            font=("Segoe UI", 10), fg="#c7f3ff", bg=self.theme["panel"],
+        ).pack(pady=(6, 1))
+        tk.Label(
+            stats_card,
+            text=self.text["last_timer"].format(last=self.last_timer or self.text["never"]),
+            font=("Segoe UI", 10), fg="#aab4c8", bg=self.theme["panel"],
+        ).pack()
 
     @staticmethod
     def local_ip():
@@ -676,6 +755,57 @@ class ShutdownTimerApp:
         )
         if self.auto_updates:
             self.check_for_updates()
+
+    def generate_new_pin(self, dialog):
+        if not messagebox.askyesno(
+            self.text["change_pin"], self.text["change_pin_confirm"], parent=dialog
+        ):
+            return
+        new_pin = f"{secrets.randbelow(1000000):06d}"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            winreg.SetValueEx(key, "RemotePin", 0, winreg.REG_SZ, new_pin)
+        self.remote_pin = new_pin
+        dialog.destroy()
+        self.restart_interface()
+
+    def record_timer(self, source):
+        self.timer_count += 1
+        source_label = "Android" if source == "android" else "PC"
+        self.last_timer = datetime.now().strftime(f"%d.%m.%Y %H:%M ({source_label})")
+        save_statistics(self.timer_count, self.last_timer)
+
+    def show_warning_window(self, minutes):
+        if self.warning_window and self.warning_window.winfo_exists():
+            self.warning_window.destroy()
+        warning = tk.Toplevel(self.root)
+        self.warning_window = warning
+        warning.title(self.text["warning_title"])
+        warning.geometry("420x210")
+        warning.resizable(False, False)
+        warning.configure(bg=self.theme["background"])
+        warning.attributes("-topmost", True)
+        warning.iconbitmap(resource_path("logo.ico"))
+
+        tk.Label(
+            warning, text="⚠", font=("Segoe UI Symbol", 34, "bold"),
+            fg="#ffbf47", bg=self.theme["background"],
+        ).pack(pady=(18, 0))
+        tk.Label(
+            warning, text=self.text["warning_title"],
+            font=("Segoe UI", 17, "bold"), fg="white",
+            bg=self.theme["background"],
+        ).pack()
+        notice = (
+            self.text["one_minute_notice"]
+            if minutes == 1
+            else self.text["warning_notice"].format(minutes=minutes)
+        )
+        tk.Label(
+            warning, text=notice, font=("Segoe UI Semibold", 12),
+            fg="#c7f3ff", bg=self.theme["background"],
+        ).pack(pady=12)
+        tk.Frame(warning, bg=self.theme["accent"], height=4, width=280).pack()
+        warning.after(12000, lambda: warning.destroy() if warning.winfo_exists() else None)
 
     def start_remote_server(self):
         app = self
@@ -759,6 +889,7 @@ class ShutdownTimerApp:
         self.minutes_var.set(f"{minute:02d}")
         seconds, target, _ = self.selected_target()
         self.request_windows_shutdown(seconds)
+        self.record_timer("android")
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
@@ -969,6 +1100,7 @@ class ShutdownTimerApp:
             return
 
         self.request_windows_shutdown(seconds)
+        self.record_timer("pc")
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
@@ -999,6 +1131,7 @@ class ShutdownTimerApp:
             )
             self.show_notification(notice)
             self.play_warning_sound()
+            self.show_warning_window(minutes_left)
 
         if self.remaining > 0:
             self.remaining -= 1
@@ -1018,6 +1151,8 @@ class ShutdownTimerApp:
             close_fds=True,
         )
         self.running = False
+        if self.warning_window and self.warning_window.winfo_exists():
+            self.warning_window.destroy()
         self.remaining = 0
         self.notified_minutes.clear()
         self.start_button.config(state="normal", bg=self.theme["accent"])

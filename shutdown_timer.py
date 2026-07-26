@@ -18,12 +18,12 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "1.7.2"
+CURRENT_VERSION = "1.7.3"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
     "italian": {
-        "subtitle": "Scegli l'orario in cui spegnere il computer",
+        "subtitle": "Scegli l'ora. Al resto pensa Shutdown Timer.",
         "hours": "Ora",
         "minutes": "Minuti",
         "ready": "Pronto",
@@ -68,7 +68,7 @@ TEXTS = {
         "timer_cancelled": "Timer annullato.",
     },
     "german": {
-        "subtitle": "Waehle die Uhrzeit zum Ausschalten",
+        "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
         "hours": "Stunde",
         "minutes": "Minuten",
         "ready": "Bereit",
@@ -113,7 +113,7 @@ TEXTS = {
         "timer_cancelled": "Timer abgebrochen.",
     },
     "english": {
-        "subtitle": "Choose the time to shut down the computer",
+        "subtitle": "Choose the time. Shutdown Timer handles the rest.",
         "hours": "Hour",
         "minutes": "Minutes",
         "ready": "Ready",
@@ -313,12 +313,21 @@ class ShutdownTimerApp:
         )
         self.settings_button.place(x=458, y=22)
 
-        tk.Label(
+        subtitle_frame = tk.Frame(
             root,
+            bg=self.theme["panel"],
+            highlightbackground="#20d3ee",
+            highlightthickness=1,
+            padx=16,
+            pady=6,
+        )
+        subtitle_frame.pack(pady=(0, 3))
+        tk.Label(
+            subtitle_frame,
             text=self.text["subtitle"],
-            font=("Segoe UI", 11),
-            fg="#aab4c8",
-            bg=self.theme["background"],
+            font=("Segoe UI Semibold", 11),
+            fg="#c7f3ff",
+            bg=self.theme["panel"],
         ).pack()
 
         self.clock = tk.Label(

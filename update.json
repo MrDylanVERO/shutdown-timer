@@ -1,5 +1,5 @@
 {
-  "version": "1.8.0",
-  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v1.8.0/Shutdown-Timer-Setup.exe",
-  "message": "Warnfenster, neue PIN, Statistik und neues Einstellungsdesign."
+  "version": "1.8.1",
+  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v1.8.1/Shutdown-Timer-Setup.exe",
+  "message": "Neue Option zum automatischen Start mit Windows."
 }

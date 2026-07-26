@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.0.0"
+CURRENT_VERSION = "2.0.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -77,6 +77,9 @@ TEXTS = {
         "never": "Mai",
         "warning_title": "Spegnimento imminente",
         "start_with_windows": "Avvia con Windows",
+        "check_updates": "Cerca aggiornamenti",
+        "up_to_date": "Hai già la versione più recente.",
+        "update_check_failed": "Impossibile controllare gli aggiornamenti.",
     },
     "german": {
         "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
@@ -133,6 +136,9 @@ TEXTS = {
         "never": "Nie",
         "warning_title": "Ausschalten steht bevor",
         "start_with_windows": "Mit Windows starten",
+        "check_updates": "Nach Updates suchen",
+        "up_to_date": "Du verwendest bereits die neueste Version.",
+        "update_check_failed": "Die Updates konnten nicht geprüft werden.",
     },
     "english": {
         "subtitle": "Choose the time. Shutdown Timer handles the rest.",
@@ -189,6 +195,9 @@ TEXTS = {
         "never": "Never",
         "warning_title": "Shutdown approaching",
         "start_with_windows": "Start with Windows",
+        "check_updates": "Check for updates",
+        "up_to_date": "You already have the latest version.",
+        "update_check_failed": "Updates could not be checked.",
     },
 }
 
@@ -409,6 +418,22 @@ class ShutdownTimerApp:
             height=1,
         )
         self.settings_button.place(x=458, y=22)
+
+        self.update_button = tk.Button(
+            root,
+            text="↻",
+            command=lambda: self.check_for_updates(manual=True),
+            font=("Segoe UI Symbol", 18, "bold"),
+            fg="white",
+            bg="#2589e8",
+            activebackground="#1d70c1",
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            width=3,
+            height=1,
+        )
+        self.update_button.place(x=458, y=72)
 
         subtitle_frame = tk.Frame(
             root,
@@ -1124,12 +1149,12 @@ class ShutdownTimerApp:
         except Exception:
             pass
 
-    def check_for_updates(self):
+    def check_for_updates(self, manual=False):
         if not UPDATE_MANIFEST_URL:
             return
-        threading.Thread(target=self._fetch_update, daemon=True).start()
+        threading.Thread(target=self._fetch_update, args=(manual,), daemon=True).start()
 
-    def _fetch_update(self):
+    def _fetch_update(self, manual=False):
         try:
             request = urllib.request.Request(
                 UPDATE_MANIFEST_URL,
@@ -1141,8 +1166,21 @@ class ShutdownTimerApp:
             download_url = str(update["download_url"])
             if self.version_tuple(latest) > self.version_tuple(CURRENT_VERSION):
                 self.root.after(0, self.offer_update, latest, download_url)
+            elif manual:
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        self.text["check_updates"], self.text["up_to_date"]
+                    ),
+                )
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
-            pass
+            if manual:
+                self.root.after(
+                    0,
+                    lambda: messagebox.showwarning(
+                        self.text["check_updates"], self.text["update_check_failed"]
+                    ),
+                )
 
     @staticmethod
     def version_tuple(version):

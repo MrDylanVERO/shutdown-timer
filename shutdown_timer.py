@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.0.2"
+CURRENT_VERSION = "2.1.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -350,6 +350,9 @@ class ShutdownTimerApp:
         self.warning_sound = saved_sound()
         self.background_path = saved_background()
         self.background_photo = None
+        self.background_original = None
+        self.background_label = None
+        self.background_resize_job = None
         self.auto_updates = saved_auto_updates()
         self.timer_count, self.last_timer = saved_statistics()
         self.warning_window = None
@@ -361,7 +364,8 @@ class ShutdownTimerApp:
 
         root.title("Shutdown Timer")
         root.geometry("520x500")
-        root.resizable(False, False)
+        root.minsize(520, 500)
+        root.resizable(True, True)
         root.configure(bg=self.theme["background"])
         self.apply_background_image()
         root.iconbitmap(resource_path("logo.ico"))
@@ -417,7 +421,7 @@ class ShutdownTimerApp:
             width=3,
             height=1,
         )
-        self.settings_button.place(x=458, y=22)
+        self.settings_button.place(relx=1.0, x=-18, y=22, anchor="ne")
 
         self.update_button = tk.Button(
             root,
@@ -433,7 +437,7 @@ class ShutdownTimerApp:
             width=3,
             height=1,
         )
-        self.update_button.place(x=458, y=72)
+        self.update_button.place(relx=1.0, x=-18, y=72, anchor="ne")
 
         subtitle_frame = tk.Frame(
             root,
@@ -888,15 +892,34 @@ class ShutdownTimerApp:
         if not self.background_path:
             return
         try:
-            image = Image.open(self.background_path).convert("RGB")
-            image = image.resize((520, 500), Image.Resampling.LANCZOS)
+            self.background_original = Image.open(self.background_path).convert("RGB")
+            image = self.background_original.resize((520, 500), Image.Resampling.LANCZOS)
             self.background_photo = ImageTk.PhotoImage(image)
-            label = tk.Label(self.root, image=self.background_photo, borderwidth=0)
-            label.place(x=0, y=0, relwidth=1, relheight=1)
-            label.lower()
+            self.background_label = tk.Label(
+                self.root, image=self.background_photo, borderwidth=0
+            )
+            self.background_label.place(x=0, y=0, relwidth=1, relheight=1)
+            self.background_label.lower()
+            self.root.bind("<Configure>", self.schedule_background_resize, add="+")
         except (OSError, ValueError):
             self.background_path = ""
             save_background("")
+
+    def schedule_background_resize(self, event=None):
+        if not self.background_original or not self.background_label:
+            return
+        if self.background_resize_job:
+            self.root.after_cancel(self.background_resize_job)
+        self.background_resize_job = self.root.after(120, self.resize_background_image)
+
+    def resize_background_image(self):
+        self.background_resize_job = None
+        width = max(520, self.root.winfo_width())
+        height = max(500, self.root.winfo_height())
+        image = self.background_original.resize((width, height), Image.Resampling.LANCZOS)
+        self.background_photo = ImageTk.PhotoImage(image)
+        self.background_label.config(image=self.background_photo)
+        self.background_label.lower()
 
     def choose_background(self, dialog):
         path = filedialog.askopenfilename(

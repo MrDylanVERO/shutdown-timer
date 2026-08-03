@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
-  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v2.1.0/Shutdown-Timer-Setup.exe",
-  "message": "Das Hauptfenster kann jetzt frei vergrößert und maximiert werden."
+  "version": "2.2.0",
+  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v2.2.0/Shutdown-Timer-Setup.exe",
+  "message": "Die Abschaltzeit kann jetzt sekundengenau gewählt werden."
 }

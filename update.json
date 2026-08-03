@@ -1,5 +1,5 @@
 {
-  "version": "2.3.0",
-  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v2.3.0/Shutdown-Timer-Setup.exe",
-  "message": "Neue Schnelltasten für 30 Minuten und 1 Stunde."
+  "version": "2.4.0",
+  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v2.4.0/Shutdown-Timer-Setup.exe",
+  "message": "Neuer umschaltbarer Timer-Dauermodus in den Einstellungen."
 }

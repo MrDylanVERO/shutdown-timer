@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.2.0"
+CURRENT_VERSION = "2.3.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -27,6 +27,8 @@ TEXTS = {
         "hours": "Ora",
         "minutes": "Minuti",
         "seconds": "Secondi",
+        "quick_30": "+30 MINUTI",
+        "quick_60": "+1 ORA",
         "ready": "Pronto",
         "start": "▶  AVVIA TIMER",
         "background": "Chiudendo la finestra, l'app resta attiva nell'area di notifica.",
@@ -87,6 +89,8 @@ TEXTS = {
         "hours": "Stunde",
         "minutes": "Minuten",
         "seconds": "Sekunden",
+        "quick_30": "+30 MINUTEN",
+        "quick_60": "+1 STUNDE",
         "ready": "Bereit",
         "start": "▶  TIMER STARTEN",
         "background": "Beim Schliessen bleibt die App im Infobereich aktiv.",
@@ -147,6 +151,8 @@ TEXTS = {
         "hours": "Hour",
         "minutes": "Minutes",
         "seconds": "Seconds",
+        "quick_30": "+30 MINUTES",
+        "quick_60": "+1 HOUR",
         "ready": "Ready",
         "start": "▶  START TIMER",
         "background": "Closing the window keeps the app running in the system tray.",
@@ -366,8 +372,8 @@ class ShutdownTimerApp:
         self.discovery_socket = None
 
         root.title("Shutdown Timer")
-        root.geometry("520x500")
-        root.minsize(520, 500)
+        root.geometry("520x580")
+        root.minsize(520, 580)
         root.resizable(True, True)
         root.configure(bg=self.theme["background"])
         self.apply_background_image()
@@ -552,6 +558,29 @@ class ShutdownTimerApp:
         )
         self.seconds_spin.pack(pady=4)
 
+        quick_row = tk.Frame(root, bg=self.theme["background"])
+        quick_row.pack(pady=(0, 9))
+        self.quick_30_button = tk.Button(
+            quick_row, text=self.text["quick_30"],
+            command=lambda: self.set_quick_time(30),
+            font=("Bahnschrift SemiBold", 10), fg="white",
+            bg=self.theme["panel"], activebackground=self.theme["accent"],
+            activeforeground="white", relief="flat", cursor="hand2",
+            width=16, height=2, highlightbackground="#20d3ee",
+            highlightthickness=1, borderwidth=0,
+        )
+        self.quick_30_button.pack(side="left", padx=6)
+        self.quick_60_button = tk.Button(
+            quick_row, text=self.text["quick_60"],
+            command=lambda: self.set_quick_time(60),
+            font=("Bahnschrift SemiBold", 10), fg="white",
+            bg=self.theme["panel"], activebackground=self.theme["accent"],
+            activeforeground="white", relief="flat", cursor="hand2",
+            width=16, height=2, highlightbackground="#2589e8",
+            highlightthickness=1, borderwidth=0,
+        )
+        self.quick_60_button.pack(side="left", padx=6)
+
         status_card = tk.Frame(
             root, bg=self.theme["panel"], padx=18, pady=4,
             highlightbackground="#34415a", highlightthickness=1,
@@ -665,6 +694,14 @@ class ShutdownTimerApp:
             state="normal" if enabled else "disabled",
             image=self.start_button_photo if enabled else self.start_button_disabled_photo,
         )
+
+    def set_quick_time(self, minutes):
+        if self.running:
+            return
+        target = datetime.now() + timedelta(minutes=minutes)
+        self.hours_var.set(f"{target.hour:02d}")
+        self.minutes_var.set(f"{target.minute:02d}")
+        self.seconds_var.set(f"{target.second:02d}")
 
     def create_title_image(self):
         width, height = 430, 68
@@ -916,7 +953,7 @@ class ShutdownTimerApp:
             return
         try:
             self.background_original = Image.open(self.background_path).convert("RGB")
-            image = self.background_original.resize((520, 500), Image.Resampling.LANCZOS)
+            image = self.background_original.resize((520, 580), Image.Resampling.LANCZOS)
             self.background_photo = ImageTk.PhotoImage(image)
             self.background_label = tk.Label(
                 self.root, image=self.background_photo, borderwidth=0
@@ -938,7 +975,7 @@ class ShutdownTimerApp:
     def resize_background_image(self):
         self.background_resize_job = None
         width = max(520, self.root.winfo_width())
-        height = max(500, self.root.winfo_height())
+        height = max(580, self.root.winfo_height())
         image = self.background_original.resize((width, height), Image.Resampling.LANCZOS)
         self.background_photo = ImageTk.PhotoImage(image)
         self.background_label.config(image=self.background_photo)
@@ -1129,6 +1166,8 @@ class ShutdownTimerApp:
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
         self.seconds_spin.config(state="disabled")
+        self.quick_30_button.config(state="disabled")
+        self.quick_60_button.config(state="disabled")
         self.status.config(text=self.text["running"], fg=self.theme["accent"])
         self.show_notification(
             self.text["remote_scheduled"].format(time=target.strftime("%H:%M"))
@@ -1357,6 +1396,8 @@ class ShutdownTimerApp:
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
         self.seconds_spin.config(state="disabled")
+        self.quick_30_button.config(state="disabled")
+        self.quick_60_button.config(state="disabled")
         self.status.config(text=self.text["running"], fg=self.theme["accent"])
         self.show_notification(
             self.text["scheduled_notice"].format(time=target.strftime("%H:%M:%S"))
@@ -1409,6 +1450,8 @@ class ShutdownTimerApp:
         self.hours_spin.config(state="readonly")
         self.minutes_spin.config(state="readonly")
         self.seconds_spin.config(state="readonly")
+        self.quick_30_button.config(state="normal")
+        self.quick_60_button.config(state="normal")
         self.status.config(text=self.text["timer_cancelled"], fg="#aab4c8")
         self.update_preview()
         self.show_notification(self.text["timer_cancelled"])

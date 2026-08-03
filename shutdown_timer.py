@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.1.0"
+CURRENT_VERSION = "2.2.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -26,6 +26,7 @@ TEXTS = {
         "subtitle": "Scegli l'ora. Al resto pensa Shutdown Timer.",
         "hours": "Ora",
         "minutes": "Minuti",
+        "seconds": "Secondi",
         "ready": "Pronto",
         "start": "▶  AVVIA TIMER",
         "background": "Chiudendo la finestra, l'app resta attiva nell'area di notifica.",
@@ -85,6 +86,7 @@ TEXTS = {
         "subtitle": "Wähle die Uhrzeit. Shutdown Timer erledigt den Rest.",
         "hours": "Stunde",
         "minutes": "Minuten",
+        "seconds": "Sekunden",
         "ready": "Bereit",
         "start": "▶  TIMER STARTEN",
         "background": "Beim Schliessen bleibt die App im Infobereich aktiv.",
@@ -144,6 +146,7 @@ TEXTS = {
         "subtitle": "Choose the time. Shutdown Timer handles the rest.",
         "hours": "Hour",
         "minutes": "Minutes",
+        "seconds": "Seconds",
         "ready": "Ready",
         "start": "▶  START TIMER",
         "background": "Closing the window keeps the app running in the system tray.",
@@ -490,8 +493,10 @@ class ShutdownTimerApp:
         default_time = datetime.now() + timedelta(hours=1)
         self.hours_var = tk.StringVar(value=f"{default_time.hour:02d}")
         self.minutes_var = tk.StringVar(value=f"{default_time.minute:02d}")
+        self.seconds_var = tk.StringVar(value=f"{default_time.second:02d}")
         self.hours_var.trace_add("write", self.update_preview)
         self.minutes_var.trace_add("write", self.update_preview)
+        self.seconds_var.trace_add("write", self.update_preview)
 
         hours_box = tk.Frame(selector, bg=self.theme["panel"])
         hours_box.pack(side="left", padx=16)
@@ -528,6 +533,24 @@ class ShutdownTimerApp:
             style="Timer.TCombobox",
         )
         self.minutes_spin.pack(pady=4)
+
+        seconds_box = tk.Frame(selector, bg=self.theme["panel"])
+        seconds_box.pack(side="left", padx=16)
+        tk.Label(
+            seconds_box, text=self.text["seconds"], font=("Segoe UI", 10),
+            fg="#c7f3ff", bg=self.theme["panel"]
+        ).pack()
+        self.seconds_spin = ttk.Combobox(
+            seconds_box,
+            textvariable=self.seconds_var,
+            values=[f"{value:02d}" for value in range(60)],
+            width=5,
+            justify="center",
+            font=("Segoe UI", 14, "bold"),
+            state="readonly",
+            style="Timer.TCombobox",
+        )
+        self.seconds_spin.pack(pady=4)
 
         status_card = tk.Frame(
             root, bg=self.theme["panel"], padx=18, pady=4,
@@ -1094,6 +1117,7 @@ class ShutdownTimerApp:
     def schedule_from_remote(self, hour, minute):
         self.hours_var.set(f"{hour:02d}")
         self.minutes_var.set(f"{minute:02d}")
+        self.seconds_var.set("00")
         seconds, target, _ = self.selected_target()
         self.request_windows_shutdown(seconds)
         self.record_timer("android")
@@ -1104,6 +1128,7 @@ class ShutdownTimerApp:
         self.settings_button.config(state="disabled")
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
+        self.seconds_spin.config(state="disabled")
         self.status.config(text=self.text["running"], fg=self.theme["accent"])
         self.show_notification(
             self.text["remote_scheduled"].format(time=target.strftime("%H:%M"))
@@ -1244,11 +1269,14 @@ class ShutdownTimerApp:
         try:
             hour = int(self.hours_var.get())
             minute = int(self.minutes_var.get())
-            if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+            second = int(self.seconds_var.get())
+            if not 0 <= hour <= 23 or not 0 <= minute <= 59 or not 0 <= second <= 59:
                 raise ValueError
 
             now = datetime.now()
-            target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            target = now.replace(
+                hour=hour, minute=minute, second=second, microsecond=0
+            )
             is_tomorrow = target <= now
             if is_tomorrow:
                 target += timedelta(days=1)
@@ -1312,7 +1340,7 @@ class ShutdownTimerApp:
         confirmed = messagebox.askyesno(
             self.text["confirm_title"],
             self.text["confirm"].format(
-                time=target.strftime("%H:%M"),
+                time=target.strftime("%H:%M:%S"),
                 day=self.text["tomorrow" if is_tomorrow else "today"],
             ),
         )
@@ -1328,9 +1356,10 @@ class ShutdownTimerApp:
         self.settings_button.config(state="disabled")
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
+        self.seconds_spin.config(state="disabled")
         self.status.config(text=self.text["running"], fg=self.theme["accent"])
         self.show_notification(
-            self.text["scheduled_notice"].format(time=target.strftime("%H:%M"))
+            self.text["scheduled_notice"].format(time=target.strftime("%H:%M:%S"))
         )
         self.tick()
 
@@ -1379,6 +1408,7 @@ class ShutdownTimerApp:
         self.settings_button.config(state="normal")
         self.hours_spin.config(state="readonly")
         self.minutes_spin.config(state="readonly")
+        self.seconds_spin.config(state="readonly")
         self.status.config(text=self.text["timer_cancelled"], fg="#aab4c8")
         self.update_preview()
         self.show_notification(self.text["timer_cancelled"])

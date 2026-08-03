@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.3.0"
+CURRENT_VERSION = "2.4.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -29,6 +29,7 @@ TEXTS = {
         "seconds": "Secondi",
         "quick_30": "+30 MINUTI",
         "quick_60": "+1 ORA",
+        "duration_mode": "Modalità durata timer",
         "ready": "Pronto",
         "start": "▶  AVVIA TIMER",
         "background": "Chiudendo la finestra, l'app resta attiva nell'area di notifica.",
@@ -91,6 +92,7 @@ TEXTS = {
         "seconds": "Sekunden",
         "quick_30": "+30 MINUTEN",
         "quick_60": "+1 STUNDE",
+        "duration_mode": "Timer-Dauermodus",
         "ready": "Bereit",
         "start": "▶  TIMER STARTEN",
         "background": "Beim Schliessen bleibt die App im Infobereich aktiv.",
@@ -153,6 +155,7 @@ TEXTS = {
         "seconds": "Seconds",
         "quick_30": "+30 MINUTES",
         "quick_60": "+1 HOUR",
+        "duration_mode": "Timer duration mode",
         "ready": "Ready",
         "start": "▶  START TIMER",
         "background": "Closing the window keeps the app running in the system tray.",
@@ -333,6 +336,20 @@ def set_startup_enabled(enabled):
                 pass
 
 
+def saved_duration_mode():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            enabled, _ = winreg.QueryValueEx(key, "DurationMode")
+            return bool(enabled)
+    except OSError:
+        return False
+
+
+def save_duration_mode(enabled):
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(key, "DurationMode", 0, winreg.REG_DWORD, int(enabled))
+
+
 def remote_pin():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
@@ -366,6 +383,7 @@ class ShutdownTimerApp:
         self.timer_count, self.last_timer = saved_statistics()
         self.warning_window = None
         self.start_with_windows = startup_enabled()
+        self.duration_mode = saved_duration_mode()
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
@@ -497,9 +515,15 @@ class ShutdownTimerApp:
         selector.pack(pady=(2, 10))
 
         default_time = datetime.now() + timedelta(hours=1)
-        self.hours_var = tk.StringVar(value=f"{default_time.hour:02d}")
-        self.minutes_var = tk.StringVar(value=f"{default_time.minute:02d}")
-        self.seconds_var = tk.StringVar(value=f"{default_time.second:02d}")
+        self.hours_var = tk.StringVar(
+            value="01" if self.duration_mode else f"{default_time.hour:02d}"
+        )
+        self.minutes_var = tk.StringVar(
+            value="00" if self.duration_mode else f"{default_time.minute:02d}"
+        )
+        self.seconds_var = tk.StringVar(
+            value="00" if self.duration_mode else f"{default_time.second:02d}"
+        )
         self.hours_var.trace_add("write", self.update_preview)
         self.minutes_var.trace_add("write", self.update_preview)
         self.seconds_var.trace_add("write", self.update_preview)
@@ -698,6 +722,14 @@ class ShutdownTimerApp:
     def set_quick_time(self, minutes):
         if self.running:
             return
+        if self.duration_mode:
+            total_seconds = minutes * 60
+            hours, rest = divmod(total_seconds, 3600)
+            mins, secs = divmod(rest, 60)
+            self.hours_var.set(f"{hours:02d}")
+            self.minutes_var.set(f"{mins:02d}")
+            self.seconds_var.set(f"{secs:02d}")
+            return
         target = datetime.now() + timedelta(minutes=minutes)
         self.hours_var.set(f"{target.hour:02d}")
         self.minutes_var.set(f"{target.minute:02d}")
@@ -749,7 +781,7 @@ class ShutdownTimerApp:
     def open_settings(self):
         dialog = tk.Toplevel(self.root)
         dialog.title(self.text["settings"])
-        dialog.geometry("480x900")
+        dialog.geometry("480x960")
         dialog.resizable(False, False)
         dialog.configure(bg=self.theme["background"])
         dialog.transient(self.root)
@@ -892,6 +924,22 @@ class ShutdownTimerApp:
         )
         self.startup_toggle_button.pack(pady=(8, 0))
 
+        self.duration_toggle_button = tk.Button(
+            dialog,
+            text=self.duration_toggle_text(),
+            command=self.toggle_duration_mode,
+            font=("Segoe UI", 10, "bold"),
+            fg="white",
+            bg=self.theme["accent"] if self.duration_mode else self.theme["panel"],
+            activebackground=self.theme["active"],
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            width=28,
+            height=2,
+        )
+        self.duration_toggle_button.pack(pady=(8, 0))
+
         tk.Label(
             dialog, text=self.text["remote"], font=("Segoe UI", 13, "bold"),
             fg="white", bg=self.theme["background"],
@@ -1022,6 +1070,15 @@ class ShutdownTimerApp:
             text=self.startup_toggle_text(),
             bg=self.theme["accent"] if self.start_with_windows else self.theme["panel"],
         )
+
+    def duration_toggle_text(self):
+        state = self.text["updates_on"] if self.duration_mode else self.text["updates_off"]
+        return f'{self.text["duration_mode"]}: {state}'
+
+    def toggle_duration_mode(self):
+        self.duration_mode = not self.duration_mode
+        save_duration_mode(self.duration_mode)
+        self.restart_interface()
 
     def generate_new_pin(self, dialog):
         if not messagebox.askyesno(
@@ -1155,7 +1212,11 @@ class ShutdownTimerApp:
         self.hours_var.set(f"{hour:02d}")
         self.minutes_var.set(f"{minute:02d}")
         self.seconds_var.set("00")
-        seconds, target, _ = self.selected_target()
+        now = datetime.now()
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        seconds = max(1, ceil((target - now).total_seconds()))
         self.request_windows_shutdown(seconds)
         self.record_timer("android")
         self.remaining = seconds
@@ -1313,6 +1374,12 @@ class ShutdownTimerApp:
                 raise ValueError
 
             now = datetime.now()
+            if self.duration_mode:
+                seconds = hour * 3600 + minute * 60 + second
+                if seconds <= 0:
+                    raise ValueError
+                target = now + timedelta(seconds=seconds)
+                return seconds, target, target.date() != now.date()
             target = now.replace(
                 hour=hour, minute=minute, second=second, microsecond=0
             )

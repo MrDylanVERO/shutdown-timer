@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
-  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v3.0.0/Shutdown-Timer-Setup.exe",
-  "message": "Neue Aktionen, Wiederholungen, Testmodus, Warnzeiten, Export/Import und verbesserte Updates."
+  "version": "3.0.1",
+  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v3.0.1/Shutdown-Timer-Setup.exe",
+  "message": "Fehlerbehebung: Die erweiterten Einstellungen lassen sich wieder öffnen und bedienen."
 }

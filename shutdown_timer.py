@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "3.0.0"
+CURRENT_VERSION = "3.0.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -1065,7 +1065,7 @@ class ShutdownTimerApp:
 
         tk.Button(
             dialog, text=f'⚙  {self.text["advanced"]}',
-            command=self.open_advanced_settings,
+            command=lambda parent=dialog: self.open_advanced_settings(parent),
             font=("Segoe UI", 10, "bold"), fg="white",
             bg="#2589e8", activebackground="#1d70c1", activeforeground="white",
             relief="flat", cursor="hand2", width=28, height=2,
@@ -1211,14 +1211,29 @@ class ShutdownTimerApp:
         save_duration_mode(self.duration_mode)
         self.restart_interface()
 
-    def open_advanced_settings(self):
+    def open_advanced_settings(self, parent=None):
+        if parent is not None and parent.winfo_exists():
+            parent.grab_release()
         window = tk.Toplevel(self.root)
         window.title(self.text["advanced"])
         window.geometry("460x520")
         window.resizable(False, False)
         window.configure(bg=self.theme["background"])
         window.iconbitmap(resource_path("logo.ico"))
-        window.transient(self.root)
+        window.transient(parent if parent is not None else self.root)
+        window.grab_set()
+        window.lift()
+        window.focus_force()
+
+        def close_advanced():
+            window.grab_release()
+            window.destroy()
+            if parent is not None and parent.winfo_exists():
+                parent.grab_set()
+                parent.lift()
+                parent.focus_force()
+
+        window.protocol("WM_DELETE_WINDOW", close_advanced)
 
         tk.Label(
             window, text=self.text["advanced"], font=("Segoe UI", 20, "bold"),

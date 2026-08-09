@@ -1,5 +1,5 @@
 {
-  "version": "2.4.0",
-  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v2.4.0/Shutdown-Timer-Setup.exe",
-  "message": "Neuer umschaltbarer Timer-Dauermodus in den Einstellungen."
+  "version": "3.0.0",
+  "download_url": "https://github.com/MrDylanVERO/shutdown-timer/releases/download/v3.0.0/Shutdown-Timer-Setup.exe",
+  "message": "Neue Aktionen, Wiederholungen, Testmodus, Warnzeiten, Export/Import und verbesserte Updates."
 }

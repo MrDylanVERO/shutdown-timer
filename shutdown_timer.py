@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-CURRENT_VERSION = "2.4.0"
+CURRENT_VERSION = "3.0.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/MrDylanVERO/shutdown-timer/main/update.json"
 
 TEXTS = {
@@ -30,6 +30,19 @@ TEXTS = {
         "quick_30": "+30 MINUTI",
         "quick_60": "+1 ORA",
         "duration_mode": "Modalità durata timer",
+        "action": "Azione",
+        "action_shutdown": "Spegni",
+        "action_restart": "Riavvia",
+        "action_hibernate": "Ibernazione",
+        "action_sleep": "Sospensione",
+        "advanced": "Funzioni avanzate",
+        "test_mode": "Modalità test",
+        "repeat_daily": "Ripeti ogni giorno",
+        "warning_times": "Avvisi prima dell'azione",
+        "reset_stats": "Azzera statistiche",
+        "export_settings": "Esporta impostazioni",
+        "import_settings": "Importa impostazioni",
+        "settings_saved": "Impostazioni salvate.",
         "ready": "Pronto",
         "start": "▶  AVVIA TIMER",
         "background": "Chiudendo la finestra, l'app resta attiva nell'area di notifica.",
@@ -93,6 +106,19 @@ TEXTS = {
         "quick_30": "+30 MINUTEN",
         "quick_60": "+1 STUNDE",
         "duration_mode": "Timer-Dauermodus",
+        "action": "Aktion",
+        "action_shutdown": "Herunterfahren",
+        "action_restart": "Neustart",
+        "action_hibernate": "Ruhezustand",
+        "action_sleep": "Energiesparen",
+        "advanced": "Erweiterte Funktionen",
+        "test_mode": "Testmodus",
+        "repeat_daily": "Täglich wiederholen",
+        "warning_times": "Warnungen vor der Aktion",
+        "reset_stats": "Statistik zurücksetzen",
+        "export_settings": "Einstellungen exportieren",
+        "import_settings": "Einstellungen importieren",
+        "settings_saved": "Einstellungen gespeichert.",
         "ready": "Bereit",
         "start": "▶  TIMER STARTEN",
         "background": "Beim Schliessen bleibt die App im Infobereich aktiv.",
@@ -156,6 +182,19 @@ TEXTS = {
         "quick_30": "+30 MINUTES",
         "quick_60": "+1 HOUR",
         "duration_mode": "Timer duration mode",
+        "action": "Action",
+        "action_shutdown": "Shut down",
+        "action_restart": "Restart",
+        "action_hibernate": "Hibernate",
+        "action_sleep": "Sleep",
+        "advanced": "Advanced features",
+        "test_mode": "Test mode",
+        "repeat_daily": "Repeat daily",
+        "warning_times": "Warnings before action",
+        "reset_stats": "Reset statistics",
+        "export_settings": "Export settings",
+        "import_settings": "Import settings",
+        "settings_saved": "Settings saved.",
         "ready": "Ready",
         "start": "▶  START TIMER",
         "background": "Closing the window keeps the app running in the system tray.",
@@ -327,7 +366,7 @@ def set_startup_enabled(enabled):
         if enabled:
             executable = os.path.abspath(sys.executable)
             winreg.SetValueEx(
-                key, "ShutdownTimer", 0, winreg.REG_SZ, f'"{executable}"'
+                key, "ShutdownTimer", 0, winreg.REG_SZ, f'"{executable}" --minimized'
             )
         else:
             try:
@@ -348,6 +387,48 @@ def saved_duration_mode():
 def save_duration_mode(enabled):
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
         winreg.SetValueEx(key, "DurationMode", 0, winreg.REG_DWORD, int(enabled))
+
+
+def saved_advanced_settings():
+    defaults = {
+        "Action": "shutdown",
+        "TestMode": 0,
+        "RepeatDaily": 0,
+        "WarningTimes": "10,5,1",
+    }
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            for name in tuple(defaults):
+                try:
+                    defaults[name], _ = winreg.QueryValueEx(key, name)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return defaults
+
+
+def save_advanced_setting(name, value):
+    value_type = winreg.REG_DWORD if isinstance(value, int) else winreg.REG_SZ
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(key, name, 0, value_type, value)
+
+
+def saved_daily_schedule():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+            value, _ = winreg.QueryValueEx(key, "DailySchedule")
+            return json.loads(value)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def save_daily_schedule(schedule):
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\ShutdownTimer") as key:
+        winreg.SetValueEx(
+            key, "DailySchedule", 0, winreg.REG_SZ,
+            json.dumps(schedule) if schedule else "",
+        )
 
 
 def remote_pin():
@@ -384,14 +465,22 @@ class ShutdownTimerApp:
         self.warning_window = None
         self.start_with_windows = startup_enabled()
         self.duration_mode = saved_duration_mode()
+        advanced = saved_advanced_settings()
+        self.selected_action = str(advanced["Action"])
+        self.test_mode = bool(advanced["TestMode"])
+        self.repeat_daily = bool(advanced["RepeatDaily"])
+        self.warning_minutes = {
+            int(value) for value in str(advanced["WarningTimes"]).split(",")
+            if value.strip().isdigit()
+        }
         self.notified_minutes = set()
         self.remote_pin = remote_pin()
         self.remote_server = None
         self.discovery_socket = None
 
         root.title("Shutdown Timer")
-        root.geometry("520x580")
-        root.minsize(520, 580)
+        root.geometry("520x640")
+        root.minsize(520, 640)
         root.resizable(True, True)
         root.configure(bg=self.theme["background"])
         self.apply_background_image()
@@ -605,6 +694,33 @@ class ShutdownTimerApp:
         )
         self.quick_60_button.pack(side="left", padx=6)
 
+        action_row = tk.Frame(root, bg=self.theme["background"])
+        action_row.pack(pady=(0, 9))
+        tk.Label(
+            action_row, text=f'{self.text["action"]}:',
+            font=("Segoe UI Semibold", 10), fg="#c7f3ff",
+            bg=self.theme["background"],
+        ).pack(side="left", padx=(0, 8))
+        self.action_choices = {
+            self.text["action_shutdown"]: "shutdown",
+            self.text["action_restart"]: "restart",
+            self.text["action_hibernate"]: "hibernate",
+            self.text["action_sleep"]: "sleep",
+        }
+        selected_action_label = next(
+            (label for label, value in self.action_choices.items() if value == self.selected_action),
+            self.text["action_shutdown"],
+        )
+        self.action_var = tk.StringVar(value=selected_action_label)
+        self.action_box = ttk.Combobox(
+            action_row, textvariable=self.action_var,
+            values=list(self.action_choices), state="readonly", width=18,
+            justify="center", font=("Segoe UI", 10, "bold"),
+            style="Timer.TCombobox",
+        )
+        self.action_box.pack(side="left")
+        self.action_box.bind("<<ComboboxSelected>>", self.on_action_selected)
+
         status_card = tk.Frame(
             root, bg=self.theme["panel"], padx=18, pady=4,
             highlightbackground="#34415a", highlightthickness=1,
@@ -641,6 +757,9 @@ class ShutdownTimerApp:
             fg="#737d91",
             bg=self.theme["background"],
         ).pack(pady=12)
+        self.root.after(900, self.restore_daily_schedule)
+        if "--minimized" in sys.argv:
+            self.root.after(250, self.root.withdraw)
 
     def create_gradient_text_image(self, text, width, height, font_size, background):
         font_path = os.path.join(
@@ -734,6 +853,10 @@ class ShutdownTimerApp:
         self.hours_var.set(f"{target.hour:02d}")
         self.minutes_var.set(f"{target.minute:02d}")
         self.seconds_var.set(f"{target.second:02d}")
+
+    def on_action_selected(self, event=None):
+        self.selected_action = self.action_choices[self.action_var.get()]
+        save_advanced_setting("Action", self.selected_action)
 
     def create_title_image(self):
         width, height = 430, 68
@@ -940,6 +1063,14 @@ class ShutdownTimerApp:
         )
         self.duration_toggle_button.pack(pady=(8, 0))
 
+        tk.Button(
+            dialog, text=f'⚙  {self.text["advanced"]}',
+            command=self.open_advanced_settings,
+            font=("Segoe UI", 10, "bold"), fg="white",
+            bg="#2589e8", activebackground="#1d70c1", activeforeground="white",
+            relief="flat", cursor="hand2", width=28, height=2,
+        ).pack(pady=(8, 0))
+
         tk.Label(
             dialog, text=self.text["remote"], font=("Segoe UI", 13, "bold"),
             fg="white", bg=self.theme["background"],
@@ -1001,7 +1132,7 @@ class ShutdownTimerApp:
             return
         try:
             self.background_original = Image.open(self.background_path).convert("RGB")
-            image = self.background_original.resize((520, 580), Image.Resampling.LANCZOS)
+            image = self.background_original.resize((520, 640), Image.Resampling.LANCZOS)
             self.background_photo = ImageTk.PhotoImage(image)
             self.background_label = tk.Label(
                 self.root, image=self.background_photo, borderwidth=0
@@ -1023,7 +1154,7 @@ class ShutdownTimerApp:
     def resize_background_image(self):
         self.background_resize_job = None
         width = max(520, self.root.winfo_width())
-        height = max(580, self.root.winfo_height())
+        height = max(640, self.root.winfo_height())
         image = self.background_original.resize((width, height), Image.Resampling.LANCZOS)
         self.background_photo = ImageTk.PhotoImage(image)
         self.background_label.config(image=self.background_photo)
@@ -1080,6 +1211,137 @@ class ShutdownTimerApp:
         save_duration_mode(self.duration_mode)
         self.restart_interface()
 
+    def open_advanced_settings(self):
+        window = tk.Toplevel(self.root)
+        window.title(self.text["advanced"])
+        window.geometry("460x520")
+        window.resizable(False, False)
+        window.configure(bg=self.theme["background"])
+        window.iconbitmap(resource_path("logo.ico"))
+        window.transient(self.root)
+
+        tk.Label(
+            window, text=self.text["advanced"], font=("Segoe UI", 20, "bold"),
+            fg="#c7f3ff", bg=self.theme["background"],
+        ).pack(pady=(22, 14))
+
+        self.test_mode_var = tk.BooleanVar(value=self.test_mode)
+        self.repeat_daily_var = tk.BooleanVar(value=self.repeat_daily)
+        for text, variable, command in (
+            (self.text["test_mode"], self.test_mode_var, self.save_test_mode),
+            (self.text["repeat_daily"], self.repeat_daily_var, self.save_repeat_daily),
+        ):
+            tk.Checkbutton(
+                window, text=text, variable=variable, command=command,
+                font=("Segoe UI", 11, "bold"), fg="white",
+                bg=self.theme["panel"], activebackground=self.theme["panel"],
+                activeforeground="white", selectcolor=self.theme["accent"],
+                width=30, anchor="w", padx=14, pady=8,
+            ).pack(pady=4)
+
+        tk.Label(
+            window, text=self.text["warning_times"], font=("Segoe UI", 12, "bold"),
+            fg="white", bg=self.theme["background"],
+        ).pack(pady=(18, 7))
+        warnings_row = tk.Frame(window, bg=self.theme["background"])
+        warnings_row.pack()
+        self.warning_vars = {}
+        for minute in (30, 10, 5, 1):
+            variable = tk.BooleanVar(value=minute in self.warning_minutes)
+            self.warning_vars[minute] = variable
+            tk.Checkbutton(
+                warnings_row, text=f"{minute} min", variable=variable,
+                command=self.save_warning_times, font=("Segoe UI", 9, "bold"),
+                fg="white", bg=self.theme["panel"], selectcolor=self.theme["accent"],
+                activebackground=self.theme["panel"], activeforeground="white",
+            ).pack(side="left", padx=5)
+
+        buttons = tk.Frame(window, bg=self.theme["background"])
+        buttons.pack(pady=24)
+        for row, (label, command) in enumerate((
+            (self.text["reset_stats"], self.reset_statistics),
+            (self.text["export_settings"], self.export_settings),
+            (self.text["import_settings"], self.import_settings),
+        )):
+            tk.Button(
+                buttons, text=label, command=command,
+                font=("Segoe UI", 10, "bold"), fg="white",
+                bg=self.theme["accent"] if row else "#b34747",
+                activebackground=self.theme["active"], activeforeground="white",
+                relief="flat", cursor="hand2", width=27, height=2,
+            ).grid(row=row, column=0, pady=5)
+
+    def save_test_mode(self):
+        self.test_mode = bool(self.test_mode_var.get())
+        save_advanced_setting("TestMode", int(self.test_mode))
+
+    def save_repeat_daily(self):
+        self.repeat_daily = bool(self.repeat_daily_var.get())
+        save_advanced_setting("RepeatDaily", int(self.repeat_daily))
+
+    def save_warning_times(self):
+        self.warning_minutes = {
+            minute for minute, variable in self.warning_vars.items() if variable.get()
+        }
+        save_advanced_setting(
+            "WarningTimes", ",".join(str(value) for value in sorted(self.warning_minutes, reverse=True))
+        )
+
+    def reset_statistics(self):
+        self.timer_count = 0
+        self.last_timer = ""
+        save_statistics(0, "")
+        messagebox.showinfo(self.text["statistics"], self.text["settings_saved"])
+
+    def export_settings(self):
+        path = filedialog.asksaveasfilename(
+            parent=self.root, defaultextension=".json",
+            filetypes=[("JSON", "*.json")], title=self.text["export_settings"],
+        )
+        if not path:
+            return
+        data = {
+            "theme": self.theme_name,
+            "sound": self.warning_sound,
+            "background": self.background_path,
+            "auto_updates": self.auto_updates,
+            "start_with_windows": self.start_with_windows,
+            "duration_mode": self.duration_mode,
+            "action": self.selected_action,
+            "test_mode": self.test_mode,
+            "repeat_daily": self.repeat_daily,
+            "warning_times": sorted(self.warning_minutes, reverse=True),
+        }
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+        messagebox.showinfo(self.text["export_settings"], self.text["settings_saved"])
+
+    def import_settings(self):
+        path = filedialog.askopenfilename(
+            parent=self.root, filetypes=[("JSON", "*.json")],
+            title=self.text["import_settings"],
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            if data.get("theme") in THEMES:
+                save_theme(data["theme"])
+            save_sound(str(data.get("sound", "default")))
+            save_background(str(data.get("background", "")))
+            save_auto_updates(bool(data.get("auto_updates", True)))
+            set_startup_enabled(bool(data.get("start_with_windows", False)))
+            save_duration_mode(bool(data.get("duration_mode", False)))
+            save_advanced_setting("Action", str(data.get("action", "shutdown")))
+            save_advanced_setting("TestMode", int(bool(data.get("test_mode", False))))
+            save_advanced_setting("RepeatDaily", int(bool(data.get("repeat_daily", False))))
+            warnings = data.get("warning_times", [10, 5, 1])
+            save_advanced_setting("WarningTimes", ",".join(str(int(v)) for v in warnings))
+            self.restart_interface()
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            messagebox.showerror(self.text["import_settings"], self.text["invalid"])
+
     def generate_new_pin(self, dialog):
         if not messagebox.askyesno(
             self.text["change_pin"], self.text["change_pin_confirm"], parent=dialog
@@ -1097,6 +1359,49 @@ class ShutdownTimerApp:
         source_label = "Android" if source == "android" else "PC"
         self.last_timer = datetime.now().strftime(f"%d.%m.%Y %H:%M ({source_label})")
         save_statistics(self.timer_count, self.last_timer)
+
+    def restore_daily_schedule(self):
+        if self.running or not self.repeat_daily:
+            return
+        schedule = saved_daily_schedule()
+        if not schedule:
+            return
+        try:
+            hour = int(schedule["hour"])
+            minute = int(schedule["minute"])
+            second = int(schedule.get("second", 0))
+            action = str(schedule.get("action", "shutdown"))
+            if action not in ("shutdown", "restart", "hibernate", "sleep"):
+                action = "shutdown"
+            now = datetime.now()
+            target = now.replace(
+                hour=hour, minute=minute, second=second, microsecond=0
+            )
+            if target <= now:
+                target += timedelta(days=1)
+            seconds = max(1, ceil((target - now).total_seconds()))
+            self.selected_action = action
+            label = next(
+                label for label, value in self.action_choices.items() if value == action
+            )
+            self.action_var.set(label)
+            self.hours_var.set(f"{hour:02d}")
+            self.minutes_var.set(f"{minute:02d}")
+            self.seconds_var.set(f"{second:02d}")
+            self.request_system_action(seconds)
+            self.remaining = seconds
+            self.running = True
+            self.notified_minutes.clear()
+            self.set_start_button_enabled(False)
+            self.settings_button.config(state="disabled")
+            self.hours_spin.config(state="disabled")
+            self.minutes_spin.config(state="disabled")
+            self.seconds_spin.config(state="disabled")
+            self.action_box.config(state="disabled")
+            self.status.config(text=self.text["running"], fg=self.theme["accent"])
+            self.tick()
+        except (ValueError, KeyError, StopIteration):
+            save_daily_schedule(None)
 
     def show_warning_window(self, minutes):
         if self.warning_window and self.warning_window.winfo_exists():
@@ -1168,6 +1473,32 @@ class ShutdownTimerApp:
             def log_message(self, format, *args):
                 return
 
+            def do_GET(self):
+                if self.path != "/status":
+                    self.send_json(404, {"ok": False})
+                    return
+                pin = self.headers.get("X-Shutdown-Pin", "")
+                if pin != app.remote_pin:
+                    self.send_json(403, {"ok": False, "error": "wrong_pin"})
+                    return
+                self.send_json(200, {
+                    "ok": True,
+                    "running": app.running,
+                    "remaining": max(0, app.remaining),
+                    "action": app.selected_action,
+                })
+
+            def do_DELETE(self):
+                if self.path != "/cancel":
+                    self.send_json(404, {"ok": False})
+                    return
+                pin = self.headers.get("X-Shutdown-Pin", "")
+                if pin != app.remote_pin:
+                    self.send_json(403, {"ok": False, "error": "wrong_pin"})
+                    return
+                app.root.after(0, app.cancel_shutdown)
+                self.send_json(200, {"ok": True})
+
         try:
             self.remote_server = ThreadingHTTPServer(("0.0.0.0", 8765), RemoteHandler)
             threading.Thread(target=self.remote_server.serve_forever, daemon=True).start()
@@ -1217,7 +1548,7 @@ class ShutdownTimerApp:
         if target <= now:
             target += timedelta(days=1)
         seconds = max(1, ceil((target - now).total_seconds()))
-        self.request_windows_shutdown(seconds)
+        self.request_system_action(seconds)
         self.record_timer("android")
         self.remaining = seconds
         self.running = True
@@ -1235,19 +1566,36 @@ class ShutdownTimerApp:
         )
         self.tick()
 
-    @staticmethod
-    def request_windows_shutdown(seconds):
-        """Start the Windows shutdown command without blocking the interface."""
+    def request_system_action(self, seconds):
+        """Schedule shutdown/restart; sleep actions execute when the countdown ends."""
+        if self.test_mode or self.selected_action in ("hibernate", "sleep"):
+            return
         shutdown_exe = os.path.join(
             os.environ.get("SystemRoot", r"C:\Windows"),
             "System32",
             "shutdown.exe",
         )
+        mode = "/r" if self.selected_action == "restart" else "/s"
         subprocess.Popen(
-            [shutdown_exe, "/s", "/t", str(seconds)],
+            [shutdown_exe, mode, "/t", str(seconds)],
             creationflags=subprocess.CREATE_NO_WINDOW,
             close_fds=True,
         )
+
+    def execute_delayed_action(self):
+        if self.test_mode:
+            messagebox.showinfo(self.text["test_mode"], self.text["warning_title"])
+            return
+        if self.selected_action == "hibernate":
+            subprocess.Popen(
+                ["rundll32.exe", "powrprof.dll,SetSuspendState", "Hibernate"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        elif self.selected_action == "sleep":
+            subprocess.Popen(
+                ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
 
     def on_sound_selected(self, event=None):
         sound = self.sound_choices[self.sound_choice_var.get()]
@@ -1300,6 +1648,20 @@ class ShutdownTimerApp:
     def check_for_updates(self, manual=False):
         if not UPDATE_MANIFEST_URL:
             return
+        if manual:
+            self.update_progress = tk.Toplevel(self.root)
+            self.update_progress.title(self.text["check_updates"])
+            self.update_progress.geometry("360x120")
+            self.update_progress.resizable(False, False)
+            self.update_progress.configure(bg=self.theme["background"])
+            tk.Label(
+                self.update_progress, text=self.text["check_updates"],
+                font=("Segoe UI", 12, "bold"), fg="white",
+                bg=self.theme["background"],
+            ).pack(pady=(20, 10))
+            progress = ttk.Progressbar(self.update_progress, mode="indeterminate", length=280)
+            progress.pack()
+            progress.start(12)
         threading.Thread(target=self._fetch_update, args=(manual,), daemon=True).start()
 
     def _fetch_update(self, manual=False):
@@ -1313,22 +1675,34 @@ class ShutdownTimerApp:
             latest = str(update["version"])
             download_url = str(update["download_url"])
             if self.version_tuple(latest) > self.version_tuple(CURRENT_VERSION):
-                self.root.after(0, self.offer_update, latest, download_url)
+                self.root.after(0, self.finish_update_check, latest, download_url)
             elif manual:
                 self.root.after(
                     0,
-                    lambda: messagebox.showinfo(
-                        self.text["check_updates"], self.text["up_to_date"]
-                    ),
+                    self.finish_update_check,
                 )
         except (OSError, ValueError, KeyError, json.JSONDecodeError):
             if manual:
                 self.root.after(
                     0,
-                    lambda: messagebox.showwarning(
-                        self.text["check_updates"], self.text["update_check_failed"]
-                    ),
+                    self.finish_update_check,
+                    None,
+                    None,
+                    True,
                 )
+
+    def finish_update_check(self, version=None, download_url=None, failed=False):
+        progress = getattr(self, "update_progress", None)
+        if progress and progress.winfo_exists():
+            progress.destroy()
+        if failed:
+            messagebox.showwarning(
+                self.text["check_updates"], self.text["update_check_failed"]
+            )
+        elif version and download_url:
+            self.offer_update(version, download_url)
+        else:
+            messagebox.showinfo(self.text["check_updates"], self.text["up_to_date"])
 
     @staticmethod
     def version_tuple(version):
@@ -1453,8 +1827,15 @@ class ShutdownTimerApp:
         if not confirmed:
             return
 
-        self.request_windows_shutdown(seconds)
+        self.request_system_action(seconds)
         self.record_timer("pc")
+        if self.repeat_daily:
+            save_daily_schedule({
+                "hour": target.hour,
+                "minute": target.minute,
+                "second": target.second,
+                "action": self.selected_action,
+            })
         self.remaining = seconds
         self.running = True
         self.notified_minutes.clear()
@@ -1463,6 +1844,7 @@ class ShutdownTimerApp:
         self.hours_spin.config(state="disabled")
         self.minutes_spin.config(state="disabled")
         self.seconds_spin.config(state="disabled")
+        self.action_box.config(state="disabled")
         self.quick_30_button.config(state="disabled")
         self.quick_60_button.config(state="disabled")
         self.status.config(text=self.text["running"], fg=self.theme["accent"])
@@ -1479,7 +1861,7 @@ class ShutdownTimerApp:
         self.set_clock_text(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
         minutes_left = ceil(self.remaining / 60)
-        if minutes_left in (10, 5, 1) and minutes_left not in self.notified_minutes:
+        if minutes_left in self.warning_minutes and minutes_left not in self.notified_minutes:
             self.notified_minutes.add(minutes_left)
             notice = (
                 self.text["one_minute_notice"]
@@ -1495,6 +1877,15 @@ class ShutdownTimerApp:
             self.root.after(1000, self.tick)
         else:
             self.status.config(text=self.text["shutdown"])
+            self.running = False
+            self.execute_delayed_action()
+            if self.repeat_daily and (
+                self.test_mode or self.selected_action in ("hibernate", "sleep")
+            ):
+                self.remaining = 24 * 3600
+                self.running = True
+                self.notified_minutes.clear()
+                self.tick()
 
     def cancel_shutdown(self, event=None):
         if not self.running:
@@ -1502,11 +1893,12 @@ class ShutdownTimerApp:
         shutdown_exe = os.path.join(
             os.environ.get("SystemRoot", r"C:\Windows"), "System32", "shutdown.exe"
         )
-        subprocess.Popen(
-            [shutdown_exe, "/a"],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            close_fds=True,
-        )
+        if not self.test_mode and self.selected_action in ("shutdown", "restart"):
+            subprocess.Popen(
+                [shutdown_exe, "/a"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                close_fds=True,
+            )
         self.running = False
         if self.warning_window and self.warning_window.winfo_exists():
             self.warning_window.destroy()
@@ -1517,8 +1909,13 @@ class ShutdownTimerApp:
         self.hours_spin.config(state="readonly")
         self.minutes_spin.config(state="readonly")
         self.seconds_spin.config(state="readonly")
+        self.action_box.config(state="readonly")
         self.quick_30_button.config(state="normal")
         self.quick_60_button.config(state="normal")
+        if self.repeat_daily:
+            self.repeat_daily = False
+            save_advanced_setting("RepeatDaily", 0)
+            save_daily_schedule(None)
         self.status.config(text=self.text["timer_cancelled"], fg="#aab4c8")
         self.update_preview()
         self.show_notification(self.text["timer_cancelled"])
